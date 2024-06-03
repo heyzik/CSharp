@@ -1,0 +1,543 @@
+﻿@inject NavigationManager NavigationManager
+
+@page "/first_slot"
+
+<div class="slot-container">  
+    <div class="slot-content">
+        <button @onclick="Close"><img src="/images/close.svg" class="close"/></button>
+
+        @for (int row = 0; row < 4; row++)
+        {
+            for (int col = 0; col < 6; col++)
+            {
+                int slotIndex = _slots[row, col];
+                string slotClass = "slot-image + " + GetSlotClass(row, col);
+                <img src="@GetSlotImage(slotIndex)" class="@slotClass" @onclick="@(() => OnSlotClicked(row, col))" />
+            }
+        }
+
+        <div class="slot-info">
+            <div>Баланс: @_balance</div>
+            <div>
+                Ставка: <input class="bet" @bind="@_bet"/>
+            </div>
+            <button class="spin" @onclick="Spin" disabled="@(_bonusWindowVisible || _bonusGameVisible)">Спин</button> 
+            <div>Выигрыш: @_winnings</div>
+            <div>Фри спины: @_freeSpins</div>
+        </div>
+    </div>
+
+    <div class="overlay"></div>
+</div>
+
+@if (_bonusWindowVisible) @* Модальное окно бонуски *@
+{
+    <div class="bonus-window">
+        <img src="picture_background_bonus.png" /> @* Сюда надо вставить картинку для фона во время выигрыша бонуски *@
+        <h2>Бонусная игра и возможность получить x3 от количества фри спинов или забрать и не рисковать?</h2>
+        <p>Фри спины: @_freeSpins</p>
+        <button @onclick="StartBonusGame">Сигма</button>
+        <button @onclick="TakeFreeSpins">Я трус</button>
+    </div>
+}
+
+@if (_bonusGameVisible) @* Бонусная игра тоесть тесты *@
+{
+    <div class="bonus-game">
+        <h2>@_currentTest.Title</h2>
+        @foreach (var question in _currentTest.Questions)
+        {
+            <div>
+                <p>@question.Text</p>
+                @foreach (var answer in question.Answers)
+                {
+                    <label>
+                        <input type="radio" name="@question.Id" @onchange="@((_) => OnAnswerSelected(question.Id, answer))" />
+                        @answer
+                    </label>
+                    <br />
+                }
+            </div>
+        }
+        <button @onclick="SubmitTest">Отправить ответы</button>
+    </div>
+}
+
+@code {
+    private string[] _fruits = new string[] {"images/fruits/T_fruit_20.png", "images/fruits/T_fruit_28.png", "images/fruits/T_fruit_25.png", "images/fruits/T_fruit_58.png" }; //Массив картинок фруктов
+    private int[,] _slots = new int[4, 6];
+    private bool[,] _winningSlots = new bool[4, 6];
+    private bool[,] _bonusSlots = new bool[4, 6];
+    private int _balance = 1000;
+    private int _bet = 0; // это сумма ставки, её надо бы сделать динамическое тоесть чтобы игрок сам ставил ставку ( мне лень )
+    private int _winnings = 0;
+    private int _freeSpins = 0;
+    private bool _bonusWindowVisible = false;
+    private bool _bonusGameVisible = false;
+    private bool _freeSpinMode = false;
+
+    private Dictionary<int, double> _fruitMultipliers = new Dictionary<int, double> // множители фруктов (не трогать)
+    {
+        { 0, 1.0 }, // банан
+        { 1, 0.8 }, // виноград
+        { 2, 0.5 }, // груша
+        { 3, 0.2 }  // яблоко
+    };
+
+    private Dictionary<int, int> _fruitProbabilities = new Dictionary<int, int> // шансы выпадения фруктов (слева значения не трогать, справа шансы выпадения)
+    {
+        { 0, 10 }, // банан
+        { 1, 20 }, // виноград
+        { 2, 30 }, // груша
+        { 3, 35 }  // яблоко
+    };
+
+    private int _bonusProbability = 5; // шанс выпадения бонуски 
+    private Random _random = new Random();
+
+    private List<Test> _tests = new List<Test> // варианты тестов
+    {
+        new Test
+        {
+            Title = "Test 1",
+            Questions = new List<Question>
+            {
+                new Question { Id = 1, Text = "Что вы выберете?", Answers = new List<string> { "МЕГА", "ПАЧКА", "ЧИПСОУ", "ЛЕЙЗ" }, CorrectAnswer = "ЛЕЙЗ" },
+                new Question { Id = 2, Text = "ИЛИ", Answers = new List<string> { "СПАСТИ", "10", "ДЕТЕЙ", "(Не обязательно черных)" }, CorrectAnswer = "10" }
+            }
+        },
+        new Test
+        {
+            Title = "Test 2",
+            Questions = new List<Question>
+            {
+                new Question { Id = 1, Text = "Столица Камбоджи?", Answers = new List<string> { "Москва", "52", "Пном Пен" }, CorrectAnswer = "Пном Пен" },
+                new Question { Id = 2, Text = "Сколько будет 2 + 2?", Answers = new List<string> { "15", "52", "25", "Москва" }, CorrectAnswer = "Москва" }
+            }
+        },
+        new Test
+        {
+            Title = "Test 3",
+            Questions = new List<Question>
+            {
+                new Question { Id = 1, Text = "Количества белка в одном граме сахара?", Answers = new List<string> { "0", "100", "ОАОАОАОАООА" }, CorrectAnswer = "0" },
+                new Question { Id = 2, Text = "У ани было 6 яблок 4 яблока она отдала восемь бмв БЖЖЖЖЖЖ?", Answers = new List<string> { "Мяу", "Гитааааааара", "Солоко", "брбрбрбр" }, CorrectAnswer = "Мяу" }
+            }
+        },
+        new Test
+        {
+            Title = "Test 4",
+            Questions = new List<Question>
+            {
+                new Question { Id = 1, Text = "Процент полезности языка Python?", Answers = new List<string> { "0%", "1%", "Я кириЛ" }, CorrectAnswer = "0%" },
+                new Question { Id = 2, Text = "Лост Медиа?", Answers = new List<string> { "Реал", "Несквик", "7", "Ставьте 5" }, CorrectAnswer = "Ставьте 5" }
+            }
+        },
+        new Test
+        {
+            Title = "Test 5",
+            Questions = new List<Question>
+            {
+                new Question { Id = 1, Text = "Пума Пума Пума тю?", Answers = new List<string> { "Анк", "Анк?", "Анк!" }, CorrectAnswer = "Анк?" },
+                new Question { Id = 2, Text = "ИВАНГАЙ?", Answers = new List<string> { "Бель", "Купала", "Финляндия", "бЕтАтЕсТеР" }, CorrectAnswer = "Финляндия" }
+            }
+        },
+        new Test
+        {
+            Title = "Test 6",
+            Questions = new List<Question>
+            {
+                new Question { Id = 1, Text = "Сколько букв в слове а?", Answers = new List<string> { "10", "1", "15" }, CorrectAnswer = "10" },
+                new Question { Id = 2, Text = "Сколько проз у Пушкина?", Answers = new List<string> { "15", "Таня", "8"}, CorrectAnswer = "15" }
+            }
+        },
+        new Test
+        {
+            Title = "Test 7",
+            Questions = new List<Question>
+            {
+                new Question { Id = 1, Text = "ДОДЕЕЕЕЕЕЕЕП?", Answers = new List<string> { "100", "Статус Утерянно", "СФерум", "МИЯУ", "AWO", "Такенгрук"  }, CorrectAnswer = "100" },
+                new Question { Id = 2, Text = "Маяковский?", Answers = new List<string> { "Розы", "Металл", "Жопа Метр на Метр"}, CorrectAnswer = "Металл" }
+            }
+        },
+        new Test
+        {
+            Title = "Test 8",
+            Questions = new List<Question>
+            {
+                new Question { Id = 1, Text = "Единственный верный правильный великий истинный умный непоколебимый правитель китая?", Answers = new List<string> { "Мао Цзэдун", "Мао Цзэдун", "Мао Цзэдун", "Мао Цзэдун", "Мао Цзэдун", "Мао Цзэдун"  }, CorrectAnswer = "Мао Цзэдун" },
+                new Question { Id = 2, Text = "3 ДНЯ БЕЗ ЗАРПЛАТЫ?", Answers = new List<string> { "КАМЕНЩИК", "ХЛЕЕЕЕЕЕЕЕЕЕЕБ", "ААААААААААААААААА!"}, CorrectAnswer = "ААААААААААААААААА!" }
+            }
+        },
+        new Test
+        {
+            Title = "Test 9",
+            Questions = new List<Question>
+            {
+                new Question { Id = 1, Text = "Количество винтовок у Советского союза на 1 января 1936 года?", Answers = new List<string> { "15", "500к", "-100к", "-4к грузовиков", }, CorrectAnswer = "-4к грузовиков" },
+                new Question { Id = 2, Text = "Hey?", Answers = new List<string> { "Boogie", "woogie", "bang bang!"}, CorrectAnswer = "Boogie" }
+            }
+        },
+        new Test
+        {
+            Title = "Test 10",
+            Questions = new List<Question>
+            {
+                new Question { Id = 1, Text = "ПШШШШ НЕ СЛЫШУ ЧТО ГОВОРИШЬ ПШШШШШШШШШШШ?", Answers = new List<string> { "ПШШШШШШШШ!Ш!ШШ!Ш!Ш!", "ПИФ ПАФ", "танки вертолеты самолеты это все в вар тандер", "понял вычеркиваю!", }, CorrectAnswer = "ПШШШШШШШШ!Ш!ШШ!Ш!Ш!" },
+                new Question { Id = 2, Text = "Квантовая физика это?", Answers = new List<string> { "АОАОАОА МЕГА ПАЧКОООООООООУ ЛЕЕЕЕЕЕЕЕЕЕЕЕЕЕЙЗ С КРРРРРРРРРРРРРАБОООООООООМ", "ЧЕМ ДАЛЬШЕ В ЛЕС", "СКИБИДИ ДОП ДОП ЕС ЕС"}, CorrectAnswer = "АОАОАОА МЕГА ПАЧКОООООООООУ ЛЕЕЕЕЕЕЕЕЕЕЕЕЕЕЙЗ С КРРРРРРРРРРРРРАБОООООООООМ" }
+            }
+        },
+    };
+
+    private Test _currentTest;
+    private Dictionary<int, string> _selectedAnswers = new Dictionary<int, string>();
+
+    private string GetSlotClass(int row, int col) // чтобы отделять бонуску от обычных фруктов
+    {
+        if (_winningSlots[row, col])
+        {
+            return "winning-slot";
+        }
+
+        if (_bonusSlots[row, col])
+        {
+            return "bonus-slot";
+        }
+
+        return "";
+    }
+
+    private string GetSlotImage(int slotIndex) // не помню что делает 09, а 38 это картинка бонусного фрукта
+    {
+        if (slotIndex == -1)
+        {
+            return "images/fruits/T_fruit_09.png";
+        }
+
+        if (slotIndex == _fruits.Length)
+        {
+            return "images/fruits/T_fruit_38.png";
+        }
+
+        return _fruits[slotIndex];
+    }
+
+    private void Spin() // метод спина
+    {
+        if (!_freeSpinMode)
+        {
+            if (_balance < _bet)
+            {
+                Console.WriteLine("Not enough balance."); // это бы сделать не в консоль...
+                return;
+            }
+
+            _balance -= _bet;
+        }
+
+        _winnings = 0;
+        ResetWinningSlots();
+        ResetBonusSlots();
+
+        for (int row = 0; row < 4; row++) 
+        {
+            for (int col = 0; col < 6; col++)
+            {
+                _slots[row, col] = GetRandomSlot();
+            }
+        }
+
+        CheckWinnings();
+        CheckBonuses();
+
+        if (_freeSpinMode)
+        {
+            _freeSpins--;
+
+            if (_freeSpins == 0)
+            {
+                _freeSpinMode = false;
+            }
+        }
+    }
+
+    private void ResetWinningSlots() // чтобы после победной комбинации не накидывали деньги до след комбинации
+    {
+        for (int row = 0; row < 4; row++)
+        {
+            for (int col = 0; col < 6; col++)
+            {
+                _winningSlots[row, col] = false;
+            }
+        }
+    }
+
+    private void ResetBonusSlots() // тоже самое но с бонуской
+    {
+        for (int row = 0; row < 4; row++)
+        {
+            for (int col = 0; col < 6; col++)
+            {
+                _bonusSlots[row, col] = false;
+            }
+        }
+    }
+
+    private void CheckWinnings() // Система проверки выигрышной комбинации с помощью линий, очень костыльно и очень хардкодно но оно вроде работает
+    {
+        var winningCombinations = new List<List<(int row, int col)>>();
+
+        for (int row = 0; row < 4; row++)
+        {
+            for (int col = 0; col < 6; col++)
+            {
+                if (col == 0) // Проверяем только первый столбец
+                {
+                    var adjacentFruits = FindAdjacentFruits(row, col, _slots[row, col]);
+
+                    if (adjacentFruits.Count >= 6 && adjacentFruits[0].col == 0 && adjacentFruits[^1].col == 5)
+                    {
+                        winningCombinations.Add(adjacentFruits);
+                    }
+                }
+            }
+        }
+
+        foreach (var combination in winningCombinations)
+        {
+            if (combination.Count >= 6)
+            {
+                double combinationMultiplier = 1.0;
+                foreach (var (row, col) in combination)
+                {
+                    combinationMultiplier += _fruitMultipliers[_slots[row, col]];
+                }
+                _winnings += (int)(_bet * combinationMultiplier);
+                MarkWinningSlotsAdjacent(combination);
+            }
+        }
+
+        _balance += _winnings;
+    }
+
+    private void CheckBonuses() // тоже проверка выигрышной комбинации но без запары с столбцами и т.д.
+    {
+        var bonusCombinations = new List<List<(int row, int col)>>();
+
+        for (int row = 0; row < 4; row++)
+        {
+            for (int col = 0; col < 6; col++)
+            {
+                if (_slots[row, col] == _fruits.Length) // Проверяем только бонусные символы
+                {
+                    var adjacentBonuses = FindAdjacentBonuses(row, col);
+
+                    if (adjacentBonuses.Count >= 3)
+                    {
+                        bonusCombinations.Add(adjacentBonuses);
+                    }
+                }
+            }
+        }
+
+        foreach (var combination in bonusCombinations)
+        {
+            if (combination.Count >= 3)
+            {
+                _freeSpins = combination.Count;
+                MarkBonusSlotsAdjacent(combination);
+                OpenBonusWindow();
+            }
+        }
+    }
+
+    private List<(int row, int col)> FindAdjacentFruits(int row, int col, int fruit) // система поиска доп символов (короче чтобы символы не образовали квадрат победной комбинации а были именно линией от 1 столбца до конца)
+    {
+        List<(int row, int col)> adjacentFruits = new List<(int row, int col)>();
+        int[] rowOffsets = new int[] { -1, 0, 1 };
+        int[] colOffsets = new int[] { 1, 1, 1 };
+        HashSet<(int row, int col)> visited = new HashSet<(int row, int col)>();
+
+        void Dfs(int row, int col)
+        {
+            if (row < 0 || row >= 4 || col < 0 || col >= 6 || _slots[row, col] != fruit || visited.Contains((row, col)))
+            {
+                return;
+            }
+
+            visited.Add((row, col));
+            adjacentFruits.Add((row, col));
+
+            if (rowOffsets[0] == -1 && colOffsets[0] == 1)
+            {
+                if (adjacentFruits.Count >= 6)
+                {
+                    return;
+                }
+            }
+
+            for (int i = 0; i < 3; i++)
+            {
+                Dfs(row + rowOffsets[i], col + colOffsets[i]);
+                if (adjacentFruits.Count >= 6)
+                {
+                    break;
+                }
+            }
+        }
+
+        Dfs(row, col);
+
+        return adjacentFruits;
+    }
+
+    private List<(int row, int col)> FindAdjacentBonuses(int row, int col) // тоже самое только с бонуской
+    {
+        List<(int row, int col)> adjacentBonuses = new List<(int row, int col)>();
+        int[] rowOffsets = new int[] { -1, 0, 1 };
+        int[] colOffsets = new int[] { -1, 0, 1 };
+        HashSet<(int row, int col)> visited = new HashSet<(int row, int col)>();
+
+        void Dfs(int row, int col)
+        {
+            if (row < 0 || row >= 4 || col < 0 || col >= 6 || _slots[row, col] != _fruits.Length || visited.Contains((row, col)))
+            {
+                return;
+            }
+
+            visited.Add((row, col));
+            adjacentBonuses.Add((row, col));
+
+            for (int i = 0; i < 3; i++)
+            {
+                for (int j = 0; j < 3; j++)
+                {
+                    Dfs(row + rowOffsets[i], col + rowOffsets[j]);
+                }
+            }
+        }
+
+        Dfs(row, col);
+
+        return adjacentBonuses;
+    }
+
+    private void MarkWinningSlotsAdjacent(List<(int row, int col)> adjacentFruits) // помечение выигрышной комбинации (кирил так и не сделал линии...)
+    {
+        foreach (var (row, col) in adjacentFruits)
+        {
+            _winningSlots[row, col] = true;
+        }
+    }
+
+    private void MarkBonusSlotsAdjacent(List<(int row, int col)> adjacentBonuses) // помечение бонусной комбинацией
+    {
+        foreach (var (row, col) in adjacentBonuses)
+        {
+            _bonusSlots[row, col] = true;
+        }
+    }
+
+    private int GetRandomSlot() // генерация символов, с учетом шансов
+    {
+        int totalProbability = _fruitProbabilities.Values.Sum() + _bonusProbability;
+        int randomValue = _random.Next(totalProbability);
+
+        int currentProbability = 0;
+        foreach (var (fruitIndex, probability) in _fruitProbabilities)
+        {
+            currentProbability += probability;
+            if (randomValue < currentProbability)
+            {
+                return fruitIndex;
+            }
+        }
+
+        if (randomValue < totalProbability)
+        {
+            return _fruits.Length;
+        }
+
+        return 0;
+    }
+
+    private void OpenBonusWindow() // открытие окна бонуски (не игры)
+    {
+        _bonusWindowVisible = true;
+    }
+
+    private void CloseBonusWindow() //закрытие
+    {
+        _bonusWindowVisible = false;
+    }
+
+    private void StartBonusGame() // открытие окна игры бонуски
+    {
+        CloseBonusWindow();
+        _currentTest = _tests[_random.Next(_tests.Count)];
+        _bonusGameVisible = true;
+    }
+
+    private void TakeFreeSpins() //кнопка чтобы взять бесплатные спины
+    {
+        CloseBonusWindow();
+        _freeSpinMode = true;
+    }
+
+    private void OnSlotClicked(int row, int col) // чтобы количество фри спинов зависило от количества выпавших бонусных символов
+    {
+        if (_bonusSlots[row, col])
+        {
+            var adjacentBonuses = FindAdjacentBonuses(row, col);
+
+            if (adjacentBonuses.Count >= 3)
+            {
+                _freeSpins += adjacentBonuses.Count;
+                MarkBonusSlotsAdjacent(adjacentBonuses);
+                OpenBonusWindow();
+            }
+        }
+    }
+
+    private void OnAnswerSelected(int questionId, string answer) //правильный ответ
+    {
+        _selectedAnswers[questionId] = answer;
+    }
+
+    private void SubmitTest() // вознаграждение или кнут
+    {
+        if (_currentTest.Questions.All(q => _selectedAnswers.ContainsKey(q.Id) && _selectedAnswers[q.Id] == q.CorrectAnswer))
+        {
+            _freeSpins *= 3;
+            _freeSpinMode = true;
+        }
+        else
+        {
+            _freeSpins -= 3;
+        }
+        _bonusGameVisible = false;
+    }
+
+    private class Test //сам тест
+    {
+        public string Title { get; set; }
+        public List<Question> Questions { get; set; }
+    }
+
+    private class Question //сам вопрос
+    {
+        public int Id { get; set; }
+        public string Text { get; set; }
+        public List<string> Answers { get; set; }
+        public string CorrectAnswer { get; set; }
+    }
+
+    private void Close()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+}
+
+
+
+

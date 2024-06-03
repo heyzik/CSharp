@@ -1,0 +1,94 @@
+﻿@using Casino.Models;
+@using System.Linq;
+@inject NavigationManager NavigationManager
+
+@page "/login"
+
+<PageTitle>Login</PageTitle>
+
+<section class="login-and-register-section">
+	<form class="login-and-register" autocomplete="off" novalidate>
+
+		<div class="logo-image">
+			<img src="/images/user.png" class="user-image">
+		</div>
+
+		<div class="logo-and-description">
+			<div class="logotype">Login</div>
+			<div class="description">
+				Please enter your name and password
+			</div>
+		</div>
+
+		<div class="form-box">
+			<div class="input-box">
+				<input type="text" name="username" class="field" id="1" maxlength="150" required="" @bind="username">
+				<span class="@GetClass(username)" id="1">Name</span>
+				<span class="error">@usernameError</span>
+			</div>
+			<div class="input-box">
+				<input type="password" name="password" class="field" id="2" required="" @bind="password">
+				<span class="@GetClass(password)" id="2">Password</span>
+				<span class="error">@passwordError</span>
+			</div>
+
+			<div class="reg">
+				<p class="reg-text">Don't have a account?</p>
+				<a href="/register" class="reg-href">Register</a>
+			</div>
+
+			<button type="button" class="next" @onclick="Validation">Next</button>
+		</div>
+	</form>
+</section>
+
+
+@code {
+	private string username = "";
+	private string password = "";
+
+	private string generalError = "Invalid username or password";
+	private string usernameError = "";
+	private string passwordError = "";
+
+	private static AppDbContext db = new AppDbContext();
+
+	private void Validation()
+	{
+		var accounts = db.Accounts.ToList();
+		var filteredAccount = accounts.Where(account => account.Name.ToLower() == username.ToLower()).Select(account => account);
+
+		if (filteredAccount.Any())
+		{
+			foreach (var element in filteredAccount)
+			{
+				if (element.Password != password)
+				{
+					usernameError = generalError;
+					passwordError = generalError;
+					break;
+				}
+				else
+				{
+					usernameError = "";
+					passwordError = "";
+				}
+				NavigationManager.NavigateTo("/");
+			}
+		}
+		else
+		{
+			usernameError = generalError;
+			passwordError = generalError;
+		}
+	} 
+
+	private string GetClass(string parameter)
+	{
+		if (parameter == "")
+			return "placeholder";
+		else
+			return "placeholder-up";
+	}
+}
+

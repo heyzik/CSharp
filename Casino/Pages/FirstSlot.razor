@@ -1,0 +1,240 @@
+﻿@page "/first_slot"
+
+@inject NavigationManager tp;
+
+<PageTitle>SecondSlot</PageTitle>
+
+<div class="container">
+
+    <div class="content">
+
+        <div>
+            <div>Большее количество: @result</div>
+            @apple
+            @banana
+            @grape
+            @pear
+            @strawberry
+            @bonus
+        </div>
+
+        @if (chance == 100)
+        {
+            <button @onclick="@TP"><dialog open; style="display:flex; width:800px; height:900px">К бонуске</dialog></button>
+        }
+        <div class="slot">
+            @for (int i = 0; i < matrix.GetLength(0); i++)
+            {
+                <div style="display: flex;">
+                    @for (int j = 0; j < matrix.GetLength(1); j++)
+                    {
+                        switch (matrix[i, j])
+                        {
+                            case 1:
+                                <img src="/images/fruits/T_fruit_49.png" />
+                                break;
+                            case 2:
+                                <img src="/images/fruits/T_fruit_20.png" />
+                                break;
+                            case 3:
+                                <img src="/images/fruits/T_fruit_15.png" />
+                                break;
+                            case 4:
+                                <img src="/images/fruits/T_fruit_11.png" />
+                                break;
+                            case 5:
+                                <img src="/images/fruits/T_fruit_58.png" />
+                                break;
+                            case 6:
+                                <img src="/images/fruits/T_fruit_48.png" />
+                                break;
+
+                        }
+                    }
+                    <br>
+                </div>
+            }
+        </div>
+        <div class="info">
+            <div class="balance">
+                <p>Баланс</p>
+                <p>@balance RUB</p>
+            </div>
+
+            <div class="bet">
+                <p>Общая ставка</p>
+                <input class="bet-input" @bind="bet" />
+                @if (bet < 1) { bet = 1; }
+            </div>
+
+            <button @onclick="Spin"
+                    type="button"
+                    class="spin">
+                Спин
+            </button>
+
+            <div>
+                <p class="win">Сумма выигрыша: @win</p>
+            </div>
+        </div>
+    </div>
+</div>
+@code {
+    Random rnd = new Random();
+    int result;
+    int bonus = 0;
+    int apple = 0;
+    int banana = 0;
+    int grape = 0;
+    int pear = 0;
+    int strawberry = 0;
+    public static float balance = 1000000;
+    public static int bet = 1;
+    float win;
+    float multiplier;
+    int chance = 0;
+    static int rows = 4;
+    static int cols = 6;
+    int[,] matrix = new int[rows, cols];
+    private void Spin()
+    {
+        Random rnd = new Random();
+        int[] values = { 1, 2, 3, 4, 5, 6 };
+        int[] arr = Enumerable.Repeat(0, rows * cols).ToArray();
+        int itog = rnd.Next(4);
+        chance = rnd.Next(101);
+        switch (chance)
+        {
+            case >= 100:
+                multiplier = 15;
+                apple = rnd.Next(15, 21);
+                grape = rnd.Next(16, 22);
+                banana = rnd.Next(17, 23);
+                strawberry = rnd.Next(18, 24);
+                pear = rnd.Next(19, 25); break;
+            case > 95:
+                multiplier = 5;
+                apple = 14;
+                grape = 15;
+                banana = 16;
+                strawberry = 17;
+                pear = 18; break;
+            case > 80:
+                multiplier = 2;
+                apple = 13;
+                grape = 14;
+                banana = 15;
+                strawberry = 16;
+                pear = 17; break;
+            case > 75:
+                multiplier = 1.5f;
+                apple = 12;
+                grape = 13;
+                banana = 14;
+                strawberry = 15;
+                pear = 16; break;
+            case > 70:
+                multiplier = 1;
+                apple = 11;
+                grape = 12;
+                banana = 13;
+                strawberry = 14;
+                pear = 15; break;
+            case > 65:
+                multiplier = 0.75f;
+                apple = 10;
+                grape = 11;
+                banana = 12;
+                strawberry = 13;
+                pear = 14; break;
+            case > 60:
+                multiplier = 0.5f;
+                grape = 9;
+                apple = 10;
+                banana = 11;
+                strawberry = 12;
+                pear = 13; break;
+            default:
+                multiplier = 0;
+                break;
+        }
+        switch (chance)
+        {
+            case 100:
+                bonus = rnd.Next(4, 7); break;
+            default:
+                bonus = rnd.Next(4); break;
+        }
+        switch (itog)
+        {
+            case 0:
+                result = apple;
+                grape = rnd.Next(0, 24 - apple - bonus + 1);
+                banana = rnd.Next(0, 24 - apple - grape - bonus + 1);
+                pear = rnd.Next(0, 24 - apple - grape - banana - bonus + 1);
+                strawberry = 24 - apple - grape - banana - pear - bonus;
+                break;
+            case 1:
+                result = grape;
+                apple = rnd.Next(0, 24 - grape - bonus + 1);
+                banana = rnd.Next(0, 24 - apple - grape - bonus + 1);
+                pear = rnd.Next(0, 24 - apple - grape - banana - bonus + 1);
+                strawberry = 24 - apple - grape - banana - pear - bonus;
+                break;
+            case 2:
+                result = banana;
+                apple = rnd.Next(0, 24 - banana - bonus + 1);
+                grape = rnd.Next(0, 24 - apple - banana - bonus + 1);
+                pear = rnd.Next(0, 24 - apple - grape - banana - bonus + 1);
+                strawberry = 24 - apple - grape - banana - pear - bonus;
+                break;
+            case 3:
+                result = pear;
+                apple = rnd.Next(0, 24 - pear - bonus + 1);
+                grape = rnd.Next(0, 24 - apple - pear - bonus + 1);
+                banana = rnd.Next(0, 24 - apple - grape - pear - bonus + 1);
+                strawberry = 24 - apple - grape - banana - pear - bonus;
+                break;
+            case 4:
+                result = strawberry;
+                apple = rnd.Next(0, 24 - strawberry - bonus + 1);
+                grape = rnd.Next(0, 24 - apple - strawberry - bonus + 1);
+                pear = rnd.Next(0, 24 - apple - grape - strawberry - bonus + 1);
+                banana = 24 - apple - grape - strawberry - pear - bonus;
+                break;
+        }
+        if (multiplier == 0)
+        {
+            bonus = 0;
+            apple = 4;
+            banana = 5;
+            grape = 5;
+            pear = 5;
+            strawberry = 5;
+            result = strawberry;
+        }
+        int[] counts = { apple, banana, grape, pear, strawberry, bonus };
+        for (int i = 0; i < values.Length; i++)
+        {
+            for (int j = 0; j < counts[i]; j++)
+            {
+                int index = rnd.Next(arr.Length);
+                while (arr[index] != 0)
+                {
+                    index = rnd.Next(arr.Length);
+                }
+                arr[index] = values[i];
+            }
+        }
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < cols; j++)
+            {
+                matrix[i, j] = arr[i * cols + j];
+            }
+        }
+        win = bet * multiplier;
+        balance = balance - bet + win;
+    }
+    private void TP() { tp.NavigateTo("/bonus_game"); }
+}

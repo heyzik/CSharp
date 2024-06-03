@@ -1,0 +1,180 @@
+﻿@using Casino.Models;
+@using System.Linq;
+@inject NavigationManager NavigationManager
+
+@page "/register"
+
+<PageTitle>Register</PageTitle>
+
+<section class="login-and-register-section">
+	<form class="login-and-register" novalidate>
+
+		<div class="logo-image">
+			<img src="/images/user.png" class="user-image">
+		</div>
+
+		<div class="logo-and-description">
+			<div class="logotype">Register</div>
+			<div class="description">
+				Please enter your name, email, password, and confirm it
+			</div>
+		</div>
+
+		<div class="form-box">
+			<div class="input-box">
+				<input type="text" name="username" class="field" id="1" maxlength="32" minlength="2" autofocus="" required="" @bind="username">
+				<span class="@GetClass(username)" id="1">Name</span>
+				<span class="error">@usernameError</span>
+			</div>
+			<div class="input-box">
+				<input type="email" name="email" class="field" id="2" required="" @bind="email">
+				<span class="@GetClass(email)" id="2">Email</span>
+				<span class="error">@emailError</span>
+			</div>
+			<div class="input-box">
+				<input type="password" name="password1" class="field" id="3" maxlength="32" minlength="8" required="" @bind="password">
+				<span class="@GetClass(password)" id="3">Password</span>
+				<span class="error">@passwordError</span>
+			</div>
+			<div class="input-box">
+				<input type="password" name="password2" class="field" id="4" maxlength="32" minlength="8" required="" @bind="secondPassword">
+				<span class="@GetClass(secondPassword)" id="4">Confirm Password</span>
+				<span class="error">@secondPasswordError</span>
+			</div>
+
+			<div class="remember-and-log">
+				<div class="remember">
+					<input type="checkbox" class="checkbox" id="remember">
+					<label for="remember">Remember me</label>
+				</div>
+				<div class="log">
+					<a href="/login/" class="log-href">I have an account</a>
+				</div>
+			</div>
+
+			<button type="button" class="next" @onclick="Validation">Next</button>
+		</div>
+	</form>
+</section>
+
+@code {
+	private string username = "";
+	private string email = "";
+	private string password = "";
+	private string secondPassword = "";
+
+	private string usernameError = "";
+	private string emailError = "";
+	private string passwordError = "";
+	private string secondPasswordError = "";
+
+	private AppDbContext db = new AppDbContext();
+
+	private void Validation()
+	{
+		// username validation
+		if (username.Length < 4)
+		{
+			usernameError = "The name must consist of at least 4 characters";
+			return;
+		}
+		else
+		{
+			usernameError = "";
+		}
+
+		// email validation
+		if (IsValidEmail(email) == false)
+		{
+			emailError = "Invalid email";
+			return;
+		}
+		else
+		{
+			emailError = "";
+		}
+
+		// password validation
+		if (password.Length < 8) {
+			passwordError = "The password must consist of at least 8 characters";
+			return;
+		}
+		else if ((password.Any(p => char.IsLetter(p)) && password.Any(p => char.IsDigit(p))) == false)
+		{
+			passwordError = "The password must consist of numbers and letters";
+			return;
+		}
+		else
+		{
+			passwordError = "";
+		}
+
+		// secondPassword validation
+		if (secondPassword != password)
+		{
+			secondPasswordError = "Passwords don't match";
+			return;
+		}
+		else
+		{
+			secondPasswordError = "";
+		}
+
+		// adding an account to the database
+		Account newAccount = new Account
+			{
+				AccountId = 3,
+				Balance = 0,
+				Name = username,
+				Email = email,
+				Password = password,
+				IsAuthor = false,
+				Category = 0
+			};
+
+		db.Accounts.Add(newAccount);
+		db.SaveChanges();
+
+		username = "";
+		email = "";
+		password = "";
+		secondPassword = "";
+
+		NavigationManager.NavigateTo("/login");
+	}
+
+	bool IsValidEmail(string email)
+	{
+		var trimmedEmail = email.Trim();
+
+		if (trimmedEmail.EndsWith("."))
+		{
+			return false;
+		}
+		try
+		{
+			var addr = new System.Net.Mail.MailAddress(email);
+			return addr.Address == trimmedEmail;
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	bool IsValidPassword(string password)
+	{
+		bool result =
+			password.Any(c => char.IsLetter(c)) &&
+			password.Any(c => char.IsDigit(c));
+		return result;
+	}
+
+	private string GetClass(string parameter)
+	{
+		if (parameter == "")
+			return "placeholder";
+		else
+			return "placeholder-up";
+	}
+}
